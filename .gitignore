@@ -1,0 +1,50 @@
+# =============================================================================
+# uvm_base —— Git 忽略规则（仿真产物 / 波形 / 日志 / 编辑器）
+# =============================================================================
+
+# ---- VCS 编译产物 ----
+simv
+simv.daidir/
+simv_rtl
+csrc/
+DVEfiles/
+ucli.key
+vc_hdrs.h
+inter.vpd
+64bit/
+.__solver_cache__/
+
+# ---- 日志 / 波形 / 覆盖率 ----
+logs/
+waves/
+urgReport/
+*.log
+*.fsdb
+*.fsdb.*
+*.vcd
+*.vpd
+*.shm
+*.key
+transcript
+
+# ---- Verdi ----
+novas*
+verdiLog/
+verdi.rc
+
+# ---- 兼容补丁产物（脚本自动生成）----
+.vcs_compat/
+
+# ---- C/C++ 中间文件 ----
+*.o
+*.so
+*.a
+
+# ---- 编辑器 / 系统 ----
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+__pycache__/
