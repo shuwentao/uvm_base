@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>uvm_base —— 通用 UVM 母版库</title>
+<style>
+  body { font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+         line-height: 1.7; color: #24292f; max-width: 1080px; margin: 0 auto; padding: 24px 28px 64px; }
+  h1 { font-size: 28px; border-bottom: 3px solid #0969da; padding-bottom: 10px; margin-bottom: 6px; }
+  h2 { font-size: 22px; margin-top: 38px; border-bottom: 1px solid #d0d7de; padding-bottom: 6px; }
+  h3 { font-size: 18px; margin-top: 26px; color: #0969da; }
+  p, li { font-size: 15px; }
+  code { background: #f6f8fa; padding: 2px 5px; border-radius: 4px; font-size: 13px;
+         font-family: "SFMono-Regular", Consolas, monospace; }
+  pre { background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 6px;
+        padding: 14px 16px; overflow-x: auto; font-size: 13px; line-height: 1.55;
+        font-family: "SFMono-Regular", Consolas, monospace; }
+  pre code { background: none; padding: 0; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 14px; }
+  th, td { border: 1px solid #d0d7de; padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: #f6f8fa; font-weight: 600; }
+  tr:nth-child(even) td { background: #fafbfc; }
+  blockquote { margin: 12px 0; padding: 10px 16px; border-left: 4px solid #0969da;
+               background: #f6f8fa; color: #57606a; }
+  .toc { background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 6px; padding: 14px 22px; }
+  .toc a { color: #0969da; text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .warn { border-left-color: #bc4c00; background: #fff8e5; }
+  .ok   { border-left-color: #1a7f37; background: #eaf6ec; }
+  .sub  { color: #57606a; font-size: 14px; margin-top: -6px; }
+  hr { border: none; border-top: 1px solid #d0d7de; margin: 30px 0; }
+</style>
+</head>
+<body>
+
+<h1>uvm_base —— 通用 UVM 母版库（与具体协议无关）</h1>
+
+<blockquote>
+<b>定位</b>：任何芯片/模块验证项目的公共底座。项目（DVP、MIPI、AXI、SPI……）只实现“与协议相关”的部分，通用流程全部复用本库。<br>
+本库<b>不含任何 DUT</b>，通过 <code>example/</code> 自证与协议无关。
+</blockquote>
+
+<div class="toc">
+<b>目录</b>
+<ol>
+  <li><a href="#env">运行环境（已验证组合）</a></li>
+  <li><a href="#struct">目录结构</a></li>
+  <li><a href="#layer">依赖关系（三层）</a></li>
+  <li><a href="#class">类层次与继承关系</a></li>
+  <li><a href="#newproj">搭一个新项目的步骤</a></li>
+  <li><a href="#scripts">通用脚本用法</a></li>
+  <li><a href="#selftest">自检</a></li>
+  <li><a href="#git">作为 Git 项目使用</a></li>
+  <li><a href="#record">验证记录</a></li>
+</ol>
+</div>
+
+<h2 id="env">0. 运行环境（已验证组合）</h2>
+
+<h3>0.1 验证通过的环境</h3>
+<table>
+<tr><th>项目</th><th>版本 / 取值</th><th>备注</th></tr>
+<tr><td>操作系统</td><td><b>Ubuntu 22.04.5 LTS (Jammy Jellyfish)</b></td><td>已在 x86_64 上完整验证</td></tr>
+<tr><td>内核</td><td>6.8.0-138-generic</td><td>VCS 会警告 <code>LINX_KRNL Unsupported Linux kernel</code>，<b>可忽略</b></td></tr>
+<tr><td>glibc</td><td><b>2.35</b></td><td>≥2.34 需打 <code>pthread_yield</code> 补丁（见 0.4）</td></tr>
+<tr><td>仿真器</td><td><b>Synopsys VCS O-2018.09-SP2_Full64（vcs-mx）</b></td><td>路径示例 <code>/mnt/data1/synopsys/vcs-mx/O-2018.09-SP2</code></td></tr>
+<tr><td>波形工具</td><td><b>Verdi O-2018.09-SP2</b></td><td>路径示例 <code>/mnt/data1/synopsys/verdi/Verdi_O-2018.09-SP2</code></td></tr>
+<tr><td>UVM</td><td><b>UVM 1.2</b>（VCS 自带 <code>etc/uvm-1.2</code>）</td><td>也支持 <code>uvm-1.1d</code>，用 <code>UVM_VER</code> 切换</td></tr>
+<tr><td>C/C++ 编译器</td><td>系统默认 <b>gcc/g++ 11.4.0</b></td><td>VCS 2018 官方只支持 4.8/6.x；11.4 需打补丁（见 0.4）</td></tr>
+<tr><td>GNU Make</td><td>4.3</td><td></td></tr>
+<tr><td>Bash</td><td>5.1.16</td><td>脚本用了数组、<code>set -euo pipefail</code></td></tr>
+<tr><td>其他工具</td><td><code>perl</code>（打补丁用）、<code>grep/awk/sed</code></td><td>一般系统自带</td></tr>
+<tr><td>License</td><td><code>LM_LICENSE_FILE</code></td><td>指向 license server 或 <code>.dat</code> 文件</td></tr>
+</table>
+
+<h3>0.2 兼容性矩阵（参考）</h3>
+<table>
+<tr><th>VCS 版本</th><th>Ubuntu 18.04 (gcc 7)</th><th>Ubuntu 20.04 (gcc 9)</th><th>Ubuntu 22.04 (gcc 11)</th></tr>
+<tr><td>O-2018.09-SP2</td><td>OK</td><td>OK（建议 gcc-9）</td><td>需 0.4 两个补丁（<b>已在本仓库脚本/说明中处理</b>）</td></tr>
+<tr><td>S/V-2021 及以后</td><td>OK</td><td>OK</td><td>OK（一般无需补丁）</td></tr>
+</table>
+
+<h3>0.3 环境变量</h3>
+<pre><code>export VCS_HOME=/mnt/data1/synopsys/vcs-mx/O-2018.09-SP2
+export VERDI_HOME=/mnt/data1/synopsys/verdi/Verdi_O-2018.09-SP2
+export LM_LICENSE_FILE=&lt;license server 或 .dat 路径&gt;
+export PATH=$VCS_HOME/bin:$VERDI_HOME/bin:$PATH</code></pre>
+<blockquote>已提供模板：修改后 <code>source scripts/env_setup.sh</code> 即可。</blockquote>
+
+<h3>0.4 已知环境坑与处理（<b>换机器 / 重装 VCS 后需重做</b>）</h3>
+
+<p><b>① GCC ≥ 12 编译 UVM DPI 失败</b></p>
+<pre><code>uvm_hdl_vcs.c:34: error: extended character “ is not valid in an identifier</code></pre>
+<p>UVM 1.2 的 DPI 源文件里 <code>#error</code> 用了弯引号（该分支实际不会编译，但会被扫描）。处理（二选一）：</p>
+<pre><code># A. 用 VCS 支持的编译器
+sudo apt-get install gcc-4.8 g++-4.8 &amp;&amp; make check VCS_CXX=g++-4.8
+
+# B. 改工具文件（本机已执行，原文件备份为 *.orig_bak）
+V=$VCS_HOME/etc/uvm-1.2
+sudo perl -CSD -pi -e 's/\x{201C}/"/g; s/\x{201D}/"/g; s/\x{2019}/'"'"'/g' \
+    $V/dpi/uvm_hdl_vcs.c $V/src/dpi/uvm_hdl_vcs.c</code></pre>
+
+<p><b>② glibc ≥ 2.34 链接失败</b></p>
+<pre><code>undefined reference to `pthread_yield'</code></pre>
+<p>glibc 2.34 起删除 <code>pthread_yield()</code>。<b>本仓库脚本已自动处理</b>：检测到 glibc ≥ 2.34 时生成
+<code>.vcs_compat/pthread_yield_stub.o</code>（内容为 <code>int pthread_yield(void){return sched_yield();}</code>）
+并通过 <code>-LDFLAGS</code> 注入链接，无需手工干预。</p>
+
+<p><b>③ Verdi 路径层级</b></p>
+<blockquote><code>VERDI_HOME</code> 必须指到<b>带版本号那一层</b>（<code>.../verdi/Verdi_O-2018.09-SP2</code>），否则 FSDB PLI 找不到，脚本会自动退回 VCD。</blockquote>
+
+<h3>0.5 建议安装的系统包</h3>
+<pre><code># VCS 2018 官方编译器（可选）
+sudo apt-get install -y gcc-4.8 g++-4.8
+
+# VCS / Verdi 运行与 GUI 常用库
+sudo apt-get install -y \
+  libncurses5 libncursesw5 libx11-6 libxext6 libxtst6 libxft2 libxrender1 \
+  libsm6 libice6 libglib2.0-0 libfreetype6 libfontconfig1 libxml2 \
+  libjpeg-turbo8 libpng16-16 lsb-core csh tcsh
+
+# 自检是否有缺失的动态库
+ldd $VERDI_HOME/bin/verdi | grep "not found"
+ldd $VCS_HOME/bin/vcs     | grep "not found"</code></pre>
+
+<h3>0.6 迁移到新环境 checklist</h3>
+<ol>
+<li>装 0.5 的系统包</li>
+<li>配 0.3 的环境变量</li>
+<li><code>make clean &amp;&amp; make check</code></li>
+<li>若报 0.4 ①②，按对应方式处理</li>
+<li>确认末尾出现 <code>[RESULT] PASS</code></li>
+</ol>
+
+<h2 id="struct">1. 目录结构</h2>
+<pre><code>uvm_base/
+├── src/                        # 通用库（项目只需 import uvm_base_pkg）
+│   ├── uvm_base_defines.svh    # 超时/收尾/打印拓扑等宏
+│   ├── uvm_base_utils.svh      # ub_get_int / ub_get_str / ub_fmt_ns 等工具函数
+│   ├── uvm_base_cfg.sv         # 配置基类（is_active / 开关 / 数量 / plusarg）
+│   ├── uvm_base_item.sv        # 事务基类（id / tag / 时间戳 / 延迟统计）
+│   ├── uvm_base_sequencer.sv   # 通用 sequencer
+│   ├── uvm_base_driver.sv      # 通用 driver 骨架（模板方法）
+│   ├── uvm_base_monitor.sv     # 通用 monitor 骨架（模板方法）
+│   ├── uvm_base_agent.sv       # 通用 agent 基类（自动取配置）
+│   ├── uvm_base_scoreboard.sv  # 通用比对基类（错误计数/统一上报/汇总）
+│   ├── uvm_base_seq.sv         # 通用序列骨架（模板方法）
+│   ├── uvm_base_env.sv         # 通用 env 基类（自动取配置/打印拓扑/汇总）
+│   ├── uvm_base_test.sv        # 通用 test 基类（超时/objection/drain/启动序列）
+│   └── uvm_base_pkg.sv         # 包文件
+├── scripts/                    # 与项目无关的 VCS / Verdi / clean / 环境脚本
+│   ├── run_vcs.sh
+│   ├── run_verdi.sh
+│   ├── clean.sh
+│   └── env_setup.sh            # 环境变量模板（按需修改后 source）
+├── example/                    # 最小示例工程（验证本库与协议无关）
+├── .gitignore
+└── Makefile</code></pre>
+
+<h2 id="layer">2. 依赖关系（三层）</h2>
+<pre><code>uvm_pkg        (Synopsys 自带 UVM 1.2，不修改)
+     ↑ import
+uvm_base_pkg   (本仓库：通用样板层)
+     ↑ import
+项目 pkg        (如 dvp_pkg：协议相关)</code></pre>
+<table>
+<tr><th>层</th><th>提供什么</th></tr>
+<tr><td><code>uvm_pkg</code></td><td>phase / factory / config_db / TLM / sequencer / report 机制</td></tr>
+<tr><td><code>uvm_base_pkg</code></td><td>每个项目都要重复写的样板：骨架类、配置基类、比对基类、test 流程、plusarg、脚本</td></tr>
+<tr><td>项目包</td><td>interface、事务字段、驱动时序、比对规则、用例</td></tr>
+</table>
+
+<h2 id="class">3. 类层次与项目继承关系</h2>
+<pre><code>uvm_base_cfg          &lt;-- 项目 cfg       (dvp_agent_cfg / dvp_env_cfg)
+uvm_base_item         &lt;-- 项目 item      (dvp_frame_item / dvp_rx_line_item ...)
+uvm_base_sequencer#REQ&lt;-- 项目 sequencer
+uvm_base_driver  #REQ &lt;-- 项目 driver    只实现 pre_run() / do_drive_item()
+uvm_base_monitor #TR  &lt;-- 项目 monitor   只实现 pre_run() / do_monitor()
+uvm_base_agent   #CFG &lt;-- 项目 agent
+uvm_base_scoreboard#CFG&lt;-- 项目 scoreboard / checker
+uvm_base_seq     #REQ &lt;-- 项目 sequence  只实现 new_item()
+uvm_base_env     #CFG &lt;-- 项目 env
+uvm_base_test         &lt;-- 项目 test      只实现 create_main_sequence() / main_sequencer()</code></pre>
+
+<h2 id="newproj">4. 搭一个新项目的步骤</h2>
+<ol>
+<li>建 <code>filelist.f</code>，首行放 <code>+incdir+&lt;uvm_base&gt;/src</code>，并把 <code>&lt;uvm_base&gt;/src/uvm_base_pkg.sv</code> 排在包之前；</li>
+<li>事务继承 <code>uvm_base_item</code>，配置继承 <code>uvm_base_cfg</code>；</li>
+<li>driver / monitor 继承模板基类，只实现协议相关方法；</li>
+<li>env / test 继承基类，test 只需返回“主序列”和“主 sequencer”；</li>
+<li>项目 Makefile 里 <code>FILELIST/TOP/DEFS/PLUS</code> 指向自己，调用 <code>uvm_base/scripts/run_vcs.sh</code>。</li>
+</ol>
+
+<h2 id="scripts">5. 通用脚本用法</h2>
+<pre><code># 编译 + 仿真（任何项目通用）
+FILELIST=./filelist.f TOP=tb_top TEST=xxx \
+DEFS="+define+DW=8" PLUS="+NUM_FRAMES=3" \
+bash &lt;uvm_base&gt;/scripts/run_vcs.sh
+
+# 只看波形
+FILELIST=./filelist.f TOP=tb_top WAVE=waves/tb_top.fsdb bash &lt;uvm_base&gt;/scripts/run_verdi.sh</code></pre>
+<table>
+<tr><th>变量</th><th>说明</th></tr>
+<tr><td><code>FILELIST</code> / <code>TOP</code></td><td>必选：文件列表与顶层模块</td></tr>
+<tr><td><code>TEST</code> / <code>SEED</code> / <code>VERB</code></td><td>用例名、随机种子、冗余度</td></tr>
+<tr><td><code>UVM_VER</code></td><td><code>uvm-1.2</code>（默认）/ <code>uvm-1.1d</code></td></tr>
+<tr><td><code>DEFS</code></td><td>追加 <code>+define+...</code></td></tr>
+<tr><td><code>PLUS</code></td><td>追加运行时 plusarg</td></tr>
+<tr><td><code>DUMP</code> / <code>WAVE</code></td><td>波形开关与格式（fsdb / vcd / none）</td></tr>
+<tr><td><code>COV</code></td><td>1 = 收集代码覆盖率</td></tr>
+<tr><td><code>OUT</code></td><td>可执行文件与 KDB 名字（默认 simv）</td></tr>
+<tr><td><code>VCS_CC</code> / <code>VCS_CXX</code></td><td>老 VCS 指定编译器，如 <code>VCS_CXX=g++-4.8</code></td></tr>
+<tr><td><code>COMP_ONLY</code> / <code>RUN_ONLY</code></td><td>只编译 / 只仿真</td></tr>
+</table>
+<blockquote>通用 plusarg（基类已支持）：<code>+TMO_NS=</code> <code>+DRAIN_NS=</code> <code>+NUM_ITEMS=</code> <code>+PRINT_TOPO=1</code> <code>+PASSIVE=1</code> <code>+EXPECT_ERR=1</code> <code>+REQUIRE_ERR=1</code></blockquote>
+
+<h2 id="selftest">6. 自检</h2>
+<pre><code>source scripts/env_setup.sh     # 或自行 export VCS_HOME / VERDI_HOME / LM_LICENSE_FILE
+make check        # 编译 + 运行 example（2 级流水 DUT，8 个随机事务，比对数据）
+make verdi
+make clean</code></pre>
+<blockquote class="ok"><b>预期结果</b><br>
+<code>UVM_INFO ... SUMMARY : ex_sb : checked=8 errors=0 warnings=0, 未比对期望事务=0</code><br>
+<code>UVM_INFO ... TEST : *** TEST PASSED ***</code><br>
+<code>[RESULT] PASS</code></blockquote>
+
+<h2 id="git">7. 作为 Git 项目使用</h2>
+<ul>
+<li>已提供 <code>.gitignore</code>：忽略 <code>simv/ csrc/ logs/ waves/ *.fsdb *.log .vcs_compat/</code> 等仿真产物；</li>
+<li>建议目录布局（两仓库平级）：
+<pre><code>&lt;your_repo&gt;/
+├── uvm_base/      # 通用母版（可单独打 tag，如 v1.0.0）
+└── dvp_uvm/       # 项目（依赖 ../uvm_base，filelist 中为相对路径）</code></pre></li>
+<li>升级 <code>uvm_base</code> 时，只改新项目 <code>filelist.f</code> 里的 <code>../uvm_base</code> 路径或 Makefile 的 <code>UVM_BASE ?=</code>。</li>
+</ul>
+
+<h2 id="record">8. 验证记录</h2>
+<table>
+<tr><th>日期</th><th>环境</th><th>结果</th></tr>
+<tr><td>2026-10-23</td><td>Ubuntu 22.04.5 + VCS O-2018.09-SP2 + Verdi O-2018.09-SP2 + UVM 1.2 + gcc 11.4</td>
+    <td><code>example</code> 编译仿真通过，<code>checked=8 errors=0</code>，<code>TEST PASSED</code></td></tr>
+</table>
+
+<hr>
+<p class="sub">uvm_base —— 通用 UVM 母版库</p>
+
+</body>
+</html>
